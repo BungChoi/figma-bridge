@@ -1,0 +1,18 @@
+{
+  "name": "figma-bridge",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Self-hosted, local-only MCP bridge connecting Gemini CLI to Figma Desktop without Dev Mode or tokens.",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build -w @figma-bridge/shared && npm run build -w @figma-bridge/mcp-server && npm run build -w @figma-bridge/figma-plugin",
+    "typecheck": "npm run build -w @figma-bridge/shared && npm run typecheck -w @figma-bridge/shared && npm run typecheck -w @figma-bridge/mcp-server && npm run typecheck -w @figma-bridge/figma-plugin",
+    "test": "npm run test -w @figma-bridge/mcp-server"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
