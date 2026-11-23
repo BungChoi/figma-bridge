@@ -6,6 +6,16 @@
   "ui": "dist/ui.html",
   "editorType": ["figma"],
   "documentAccess": "dynamic-page",
+  "menu": [
+    {
+      "name": "Open Bridge UI",
+      "command": "open-ui"
+    },
+    {
+      "name": "Run in Background (No Popup)",
+      "command": "run-background"
+    }
+  ],
   "networkAccess": {
     "allowedDomains": ["none"],
     "devAllowedDomains": [

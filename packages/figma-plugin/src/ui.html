@@ -8,6 +8,7 @@
         color-scheme: light dark;
         --bg: var(--figma-color-bg, #ffffff);
         --bg-secondary: var(--figma-color-bg-secondary, #f5f5f5);
+        --bg-hover: var(--figma-color-bg-hover, #ebebeb);
         --text: var(--figma-color-text, #1e1e1e);
         --text-muted: var(--figma-color-text-secondary, #6e6e6e);
         --border: var(--figma-color-border, #e5e5e5);
@@ -27,6 +28,7 @@
         line-height: 1.4;
         background: var(--bg);
         color: var(--text);
+        overflow: hidden;
       }
 
       .status-row {
@@ -56,6 +58,45 @@
 
       .dot[data-state='disconnected'] {
         background: #dc2626;
+      }
+
+      .status-label {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .port-badge {
+        display: none;
+        font-size: 11px;
+        font-weight: 500;
+        color: var(--text-muted);
+      }
+
+      .window-actions {
+        margin-left: auto;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        flex-shrink: 0;
+      }
+
+      .icon-btn {
+        height: 22px;
+        padding: 0 6px;
+        border: 1px solid var(--border);
+        border-radius: 5px;
+        background: var(--bg-secondary);
+        color: var(--text-muted);
+        font-size: 11px;
+        font-weight: 500;
+        cursor: pointer;
+        line-height: 1;
+      }
+
+      .icon-btn:hover {
+        background: var(--bg-hover);
+        color: var(--text);
       }
 
       .detail {
@@ -88,7 +129,7 @@
         font-size: 12px;
       }
 
-      button {
+      .primary-btn {
         margin-left: auto;
         padding: 6px 10px;
         border: none;
@@ -100,21 +141,45 @@
         cursor: pointer;
       }
 
-      button:hover {
+      .primary-btn:hover {
         opacity: 0.92;
+      }
+
+      body[data-minimized='true'] {
+        padding: 8px 10px;
+      }
+
+      body[data-minimized='true'] .status-row {
+        margin-bottom: 0;
+        gap: 6px;
+      }
+
+      body[data-minimized='true'] .port-badge {
+        display: inline;
+      }
+
+      body[data-minimized='true'] #hide-btn,
+      body[data-minimized='true'] .detail,
+      body[data-minimized='true'] .controls {
+        display: none;
       }
     </style>
   </head>
-  <body>
+  <body data-minimized="false">
     <div class="status-row">
       <span id="status-dot" class="dot" data-state="connecting"></span>
-      <span id="status-text">Connecting...</span>
+      <span id="status-text" class="status-label">Connecting...</span>
+      <span id="port-badge" class="port-badge">:38451</span>
+      <div class="window-actions">
+        <button id="hide-btn" class="icon-btn" type="button" title="Run in background (hide popup)" aria-label="Run in background">Hide</button>
+        <button id="minimize-btn" class="icon-btn" type="button" title="Minimize to compact bar" aria-label="Minimize to compact bar">–</button>
+      </div>
     </div>
     <div id="detail-text" class="detail">ws://localhost:38451</div>
     <div class="controls">
       <label for="port-input">Port</label>
       <input id="port-input" type="number" min="1" max="65535" value="38451" />
-      <button id="reconnect-btn" type="button">Reconnect</button>
+      <button id="reconnect-btn" class="primary-btn" type="button">Reconnect</button>
     </div>
     <!-- INLINE_UI_SCRIPT -->
   </body>

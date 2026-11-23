@@ -1,23 +1,36 @@
-import type {
-  BridgeRequest,
-  BridgeResponse,
-  BridgeStatus,
-  ExportedImage,
-  NodeResult,
-  SelectionResult,
+import {
+  DEFAULT_BRIDGE_PORT,
+  type BridgeRequest,
+  type BridgeResponse,
+  type BridgeStatus,
+  type ExportedImage,
+  type NodeResult,
+  type SelectionResult,
 } from '@figma-bridge/shared';
 import { serializeLocalTokens, serializeNode } from './serializer.js';
 
-interface UiBridgeMessage {
-  type: 'bridge-request';
-  payload: BridgeRequest;
-}
+const STORAGE_KEY_PORT = 'figma-bridge:port';
+const STORAGE_KEY_MINIMIZED = 'figma-bridge:minimized';
+
+const EXPANDED_SIZE = { width: 280, height: 156 } as const;
+const MINIMIZED_SIZE = { width: 192, height: 40 } as const;
+
+type ConnectionState = 'connecting' | 'connected' | 'disconnected' | 'reconnecting';
+
+type UiToPluginMessage =
+  | { type: 'bridge-request'; payload: BridgeRequest }
+  | { type: 'ui-ready' }
+  | { type: 'ui-toggle-minimize'; minimized: boolean }
+  | { type: 'ui-hide-to-background' }
+  | { type: 'ui-save-port'; port: number }
+  | { type: 'ui-connection-status'; state: ConnectionState; port: number };
 
 class PluginRequestError extends Error {
   readonly code: string;
 
   constructor(code: string, message: string) {
     super(message);
+    this.name = 'PluginRequestError';
     this.code = code;
   }
 }
@@ -34,6 +47,10 @@ function clampScale(raw: unknown, fallback = 2): number {
     return fallback;
   }
   return Math.max(0.25, Math.min(4, raw));
+}
+
+function isValidPort(raw: unknown): raw is number {
+  return typeof raw === 'number' && Number.isInteger(raw) && raw >= 1 && raw <= 65535;
 }
 
 async function handleRequest(req: BridgeRequest): Promise<unknown> {
@@ -93,9 +110,10 @@ async function handleRequest(req: BridgeRequest): Promise<unknown> {
     }
 
     case 'export_node_image': {
-      const requestedId = typeof params.nodeId === 'string' && params.nodeId.trim().length > 0
-        ? params.nodeId.trim()
-        : undefined;
+      const requestedId =
+        typeof params.nodeId === 'string' && params.nodeId.trim().length > 0
+          ? params.nodeId.trim()
+          : undefined;
 
       const targetNode: BaseNode | null = requestedId
         ? await figma.getNodeByIdAsync(requestedId)
@@ -119,12 +137,14 @@ async function handleRequest(req: BridgeRequest): Promise<unknown> {
 
       const format = params.format === 'SVG' ? 'SVG' : 'PNG';
       const scale = clampScale(params.scale, 2);
-      const width = 'width' in targetNode && typeof targetNode.width === 'number'
-        ? Math.round(targetNode.width)
-        : undefined;
-      const height = 'height' in targetNode && typeof targetNode.height === 'number'
-        ? Math.round(targetNode.height)
-        : undefined;
+      const width =
+        'width' in targetNode && typeof targetNode.width === 'number'
+          ? Math.round(targetNode.width)
+          : undefined;
+      const height =
+        'height' in targetNode && typeof targetNode.height === 'number'
+          ? Math.round(targetNode.height)
+          : undefined;
 
       if (format === 'SVG') {
         const svg = await targetNode.exportAsync({ format: 'SVG_STRING' });
@@ -163,52 +183,179 @@ async function handleRequest(req: BridgeRequest): Promise<unknown> {
     }
 
     default: {
-      throw new PluginRequestError('UNKNOWN_METHOD', `Unsupported bridge method "${String(req.method)}".`);
+      throw new PluginRequestError(
+        'UNKNOWN_METHOD',
+        `Unsupported bridge method "${String(req.method)}".`,
+      );
     }
   }
 }
 
-figma.showUI(__html__, { width: 280, height: 150, themeColors: true });
+let isUiHidden = figma.command === 'run-background';
+let lastNotifiedConnection: 'connected' | 'disconnected' | null = null;
 
-figma.ui.onmessage = async (msg: unknown) => {
-  if (
-    !msg ||
-    typeof msg !== 'object' ||
-    (msg as Partial<UiBridgeMessage>).type !== 'bridge-request'
-  ) {
-    return;
-  }
+figma.showUI(__html__, {
+  width: EXPANDED_SIZE.width,
+  height: EXPANDED_SIZE.height,
+  visible: !isUiHidden,
+  themeColors: true,
+});
 
-  const req = (msg as UiBridgeMessage).payload;
-  if (!req || typeof req.id !== 'string' || typeof req.method !== 'string') {
-    return;
-  }
+if (isUiHidden) {
+  figma.notify('Figma Local Bridge connecting in background...', { timeout: 2500 });
+}
 
-  let response: BridgeResponse;
+async function sendInitialState(): Promise<void> {
+  let savedPort = DEFAULT_BRIDGE_PORT;
+  let savedMinimized = false;
+
   try {
-    const result = await handleRequest(req);
-    response = { id: req.id, ok: true, result };
-  } catch (err) {
-    if (err instanceof PluginRequestError) {
-      response = {
-        id: req.id,
-        ok: false,
-        error: { code: err.code, message: err.message },
-      };
-    } else {
-      response = {
-        id: req.id,
-        ok: false,
-        error: {
-          code: 'PLUGIN_ERROR',
-          message: err instanceof Error ? err.message : String(err),
-        },
-      };
+    const [storedPort, storedMinimized] = await Promise.all([
+      figma.clientStorage.getAsync(STORAGE_KEY_PORT),
+      figma.clientStorage.getAsync(STORAGE_KEY_MINIMIZED),
+    ]);
+    if (isValidPort(storedPort)) {
+      savedPort = storedPort;
     }
+    if (typeof storedMinimized === 'boolean') {
+      savedMinimized = storedMinimized;
+    }
+  } catch {
+    // Fall back to defaults if clientStorage is unavailable
+  }
+
+  if (!isUiHidden && savedMinimized) {
+    figma.ui.resize(MINIMIZED_SIZE.width, MINIMIZED_SIZE.height);
   }
 
   figma.ui.postMessage({
-    type: 'bridge-response',
-    payload: response,
+    type: 'ui-init',
+    payload: {
+      port: savedPort,
+      minimized: savedMinimized,
+    },
   });
+}
+
+figma.on('run', ({ command }) => {
+  if (command === 'open-ui' && isUiHidden) {
+    isUiHidden = false;
+    figma.ui.show();
+  }
+});
+
+function handleConnectionStatusNotification(state: ConnectionState, port: number): void {
+  if (state === 'connected') {
+    const changed = lastNotifiedConnection !== 'connected';
+    lastNotifiedConnection = 'connected';
+    if (isUiHidden && changed) {
+      figma.notify(`Figma Local Bridge connected (ws://localhost:${port})`, { timeout: 3000 });
+    }
+    return;
+  }
+
+  if (state === 'reconnecting' || state === 'disconnected') {
+    const wasConnected = lastNotifiedConnection === 'connected';
+    lastNotifiedConnection = 'disconnected';
+    if (isUiHidden && wasConnected) {
+      figma.notify(`Figma Local Bridge disconnected from localhost:${port} — retrying...`, {
+        error: true,
+        timeout: 3500,
+      });
+    }
+  }
+}
+
+figma.ui.onmessage = async (msg: unknown) => {
+  if (!msg || typeof msg !== 'object' || !('type' in msg)) {
+    return;
+  }
+
+  const typedMsg = msg as Partial<UiToPluginMessage>;
+
+  switch (typedMsg.type) {
+    case 'ui-ready': {
+      await sendInitialState();
+      return;
+    }
+
+    case 'ui-toggle-minimize': {
+      const minimized = typedMsg.minimized === true;
+      isUiHidden = false;
+      figma.ui.resize(
+        minimized ? MINIMIZED_SIZE.width : EXPANDED_SIZE.width,
+        minimized ? MINIMIZED_SIZE.height : EXPANDED_SIZE.height,
+      );
+      try {
+        await figma.clientStorage.setAsync(STORAGE_KEY_MINIMIZED, minimized);
+      } catch {
+        // Ignore storage errors
+      }
+      return;
+    }
+
+    case 'ui-hide-to-background': {
+      isUiHidden = true;
+      figma.ui.hide();
+      figma.notify(
+        'Figma Local Bridge running in background. Reopen via Plugins -> Development -> Figma Local Bridge -> Open Bridge UI.',
+        { timeout: 4000 },
+      );
+      return;
+    }
+
+    case 'ui-save-port': {
+      if (isValidPort(typedMsg.port)) {
+        try {
+          await figma.clientStorage.setAsync(STORAGE_KEY_PORT, typedMsg.port);
+        } catch {
+          // Ignore storage errors
+        }
+      }
+      return;
+    }
+
+    case 'ui-connection-status': {
+      if (typeof typedMsg.state === 'string' && isValidPort(typedMsg.port)) {
+        handleConnectionStatusNotification(typedMsg.state, typedMsg.port);
+      }
+      return;
+    }
+
+    case 'bridge-request': {
+      const req = typedMsg.payload;
+      if (!req || typeof req.id !== 'string' || typeof req.method !== 'string') {
+        return;
+      }
+
+      let response: BridgeResponse;
+      try {
+        const result = await handleRequest(req);
+        response = { id: req.id, ok: true, result };
+      } catch (err) {
+        if (err instanceof PluginRequestError) {
+          response = {
+            id: req.id,
+            ok: false,
+            error: { code: err.code, message: err.message },
+          };
+        } else {
+          response = {
+            id: req.id,
+            ok: false,
+            error: {
+              code: 'PLUGIN_ERROR',
+              message: err instanceof Error ? err.message : String(err),
+            },
+          };
+        }
+      }
+
+      figma.ui.postMessage({
+        type: 'bridge-response',
+        payload: response,
+      });
+      return;
+    }
+  }
 };

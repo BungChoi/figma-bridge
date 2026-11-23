@@ -85,10 +85,10 @@ Optional custom WebSocket port via `env`:
 1. Open **Figma Desktop** and open a file where you have **Can edit** access.
 2. Go to **Plugins -> Development -> Import plugin from manifest...**
 3. Select `<repo-root>/packages/figma-plugin/manifest.json`.
-4. Launch **Plugins -> Development -> Figma Local Bridge**.
-5. Confirm the plugin window shows a green **Connected** indicator (`ws://localhost:38451`).
+4. Launch **Plugins -> Development -> Figma Local Bridge -> Open Bridge UI** (or **Run in Background (No Popup)** to connect without a floating window).
+5. Confirm the plugin window shows a green **Connected** indicator (`ws://localhost:38451`). You can click **`–`** to minimize it into a compact bar or **`Hide`** to move it to the background.
 
-> **Keep the plugin window open** while working with Gemini CLI — clicking `X` terminates the plugin sandbox and UI WebSocket in Figma, disconnecting the bridge. Drag the compact window to a corner so it stays out of your way; if you close it by mistake, relaunch it quickly on macOS with **`Option + Cmd + P`** (*Run last plugin*) or via **Plugins -> Development -> Figma Local Bridge**.
+> **Keep the plugin running** while working with Gemini CLI — clicking `X` on the popup (or **Cancel** on the background pill) terminates the plugin sandbox and UI WebSocket in Figma, disconnecting the bridge. If you close it by mistake, relaunch it quickly on macOS with **`Option + Cmd + P`** (*Run last plugin*) or via **Plugins -> Development -> Figma Local Bridge**.
 
 ## 4. Verify & Use
 
