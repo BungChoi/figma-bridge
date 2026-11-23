@@ -101,7 +101,7 @@ function connect(): void {
 
   const port = getTargetPort();
   savePort(port);
-  const url = `ws://127.0.0.1:${port}`;
+  const url = `ws://localhost:${port}`;
   manualClose = false;
   setStatus('connecting', url);
 

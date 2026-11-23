@@ -9,7 +9,6 @@
   "networkAccess": {
     "allowedDomains": ["none"],
     "devAllowedDomains": [
-      "ws://127.0.0.1:38451",
       "ws://localhost:38451"
     ]
   }
